@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My File Center</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --primary-color: #24292e; /* GitHub Gray */
+            --accent-color: #0366d6;  /* Link Blue */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .file-list {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            padding: 10px 0;
+            list-style: none;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #eeeeee;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .file-size {
+            font-size: 0.85rem;
+            color: #666666;
+            margin-top: 4px;
+        }
+
+        .download-btn {
+            background-color: var(--accent-color);
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: background 0.2s ease;
+        }
+
+        .download-btn:hover {
+            background-color: #024ea3;
+        }
+
+        .loading, .error-msg {
+            text-align: center;
+            padding: 30px;
+            color: #666666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Shared Downloads</h1>
+        <p>Direct access to my GitHub repository files</p>
+    </header>
+
+    <ul class="file-list" id="fileList">
+        <li class="loading">Fetching latest files from GitHub...</li>
+    </ul>
+</div>
+
+<script>
+    // ⚙️ CONFIGURATION: Replace these with your actual details
+    const GITHUB_USERNAME = "Devriz1";
+    const REPO_NAME = "latest";
+    const FOLDER_PATH = ""; // Leave blank "" if your files are in the root directory.
+
+    const fileListElement = document.getElementById('fileList');
+
+    // Function to convert bytes to human-readable format
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    async function fetchGitHubFiles() {
+        const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FOLDER_PATH}`;
+        
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error('Failed to fetch repository data.');
+            
+            const files = await response.json();
+            fileListElement.innerHTML = ''; // Clear loading message
+
+            // Filter out system files or subfolders if you only want downloadable items
+            const downloadableFiles = files.filter(file => file.type === 'file' && file.name !== 'README.md' && file.name !== 'index.html');
+
+            if (downloadableFiles.length === 0) {
+                fileListElement.innerHTML = '<li class="loading">No files found in this repository.</li>';
+                return;
+            }
+
+            downloadableFiles.forEach(file => {
+                const li = document.createElement('li');
+                li.className = 'file-item';
+
+                // Use download_url for direct binary delivery bypasses GitHub's webpage UI
+                li.innerHTML = `
+                    <div class="file-info">
+                        <span class="file-name">${file.name}</span>
+                        <span class="file-size">${formatBytes(file.size)}</span>
+                    </div>
+                    <a href="${file.download_url}" class="download-btn" download>Download</a>
+                `;
+                fileListElement.appendChild(li);
+            });
+
+        } catch (error) {
+            console.error(error);
+            fileListElement.innerHTML = `<li class="error-msg">Error loading files. Ensure your repository is Public and configuration is correct.</li>`;
+        }
+    }
+
+    // Initialize fetching
+    fetchGitHubFiles();
+</script>
+
+</body>
+</html>
