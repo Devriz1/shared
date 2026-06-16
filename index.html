@@ -118,7 +118,7 @@
 </div>
 
 <script>
-    // ⚙️ CONFIGURATION: Set up your GitHub location details
+    // ⚙️ CONFIGURATION: Cleaned up your configuration settings
     const GITHUB_USERNAME = "Devriz1";
     const REPO_NAME = "shared";
     const FOLDER_PATH = "exe"; 
@@ -184,7 +184,7 @@
                         // 3. Inject a silent temporary hyperlink element and fire it
                         const hiddenLink = document.createElement('a');
                         hiddenLink.href = localUrl;
-                        hiddenLink.download = file.name; // Now forced securely due to internal source injection
+                        hiddenLink.download = file.name; 
                         document.body.appendChild(hiddenLink);
                         hiddenLink.click();
                         
@@ -196,7 +196,6 @@
                         downloadBtn.disabled = false;
                     } catch (err) {
                         console.error('Blob capture routine failed:', err);
-                        // Safe fallback fallback if browser fails blob generation
                         window.open(file.download_url, '_blank');
                         downloadBtn.innerText = 'Download';
                         downloadBtn.disabled = false;
