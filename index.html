@@ -82,11 +82,18 @@
             border-radius: 6px;
             font-size: 0.9rem;
             font-weight: 500;
-            transition: background 0.2s ease;
+            transition: background 0.2s ease, transform 0.1s ease;
+            border: none;
+            cursor: pointer;
         }
 
         .download-btn:hover {
             background-color: #024ea3;
+        }
+        
+        .download-btn:disabled {
+            background-color: #8cc2ff;
+            cursor: not-allowed;
         }
 
         .loading, .error-msg {
@@ -111,14 +118,14 @@
 </div>
 
 <script>
-    // ⚙️ CONFIGURATION: Replace these with your actual details
+    // ⚙️ CONFIGURATION: Set up your GitHub location details
     const GITHUB_USERNAME = "Devriz1";
     const REPO_NAME = "shared";
-    const FOLDER_PATH = "exe"; // Leave blank "" if your files are in the root directory.
+    const FOLDER_PATH = "exe"; 
 
     const fileListElement = document.getElementById('fileList');
 
-    // Function to convert bytes to human-readable format
+    // Function to convert bytes into clean human-readable text
     function formatBytes(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -132,16 +139,16 @@
         
         try {
             const response = await fetch(apiUrl);
-            if (!response.ok) throw new Error('Failed to fetch repository data.');
+            if (!response.ok) throw new Error('Failed to fetch repository data. Ensure repo is public.');
             
             const files = await response.json();
-            fileListElement.innerHTML = ''; // Clear loading message
+            fileListElement.innerHTML = ''; // Wipe loading message
 
-            // Filter out system files or subfolders if you only want downloadable items
+            // Filter out system documentation or layout code files
             const downloadableFiles = files.filter(file => file.type === 'file' && file.name !== 'README.md' && file.name !== 'index.html');
 
             if (downloadableFiles.length === 0) {
-                fileListElement.innerHTML = '<li class="loading">No files found in this repository.</li>';
+                fileListElement.innerHTML = '<li class="loading">No files found in this folder.</li>';
                 return;
             }
 
@@ -149,24 +156,64 @@
                 const li = document.createElement('li');
                 li.className = 'file-item';
 
-                // Use download_url for direct binary delivery bypasses GitHub's webpage UI
+                // Structure the data row text
                 li.innerHTML = `
                     <div class="file-info">
                         <span class="file-name">${file.name}</span>
                         <span class="file-size">${formatBytes(file.size)}</span>
                     </div>
-                    <a href="${file.download_url}" class="download-btn" download>Download</a>
                 `;
+
+                // Generate button and map custom direct download function to it
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'download-btn';
+                downloadBtn.innerText = 'Download';
+                
+                downloadBtn.onclick = async () => {
+                    downloadBtn.disabled = true;
+                    downloadBtn.innerText = 'Downloading...';
+                    
+                    try {
+                        // 1. Fetch file as a binary stream
+                        const fileResponse = await fetch(file.download_url);
+                        const fileBlob = await fileResponse.blob();
+                        
+                        // 2. Wrap payload inside a virtual, localized URL object
+                        const localUrl = window.URL.createObjectURL(fileBlob);
+                        
+                        // 3. Inject a silent temporary hyperlink element and fire it
+                        const hiddenLink = document.createElement('a');
+                        hiddenLink.href = localUrl;
+                        hiddenLink.download = file.name; // Now forced securely due to internal source injection
+                        document.body.appendChild(hiddenLink);
+                        hiddenLink.click();
+                        
+                        // 4. Garbage collection house-cleaning tasks
+                        window.URL.revokeObjectURL(localUrl);
+                        document.body.removeChild(hiddenLink);
+                        
+                        downloadBtn.innerText = 'Download';
+                        downloadBtn.disabled = false;
+                    } catch (err) {
+                        console.error('Blob capture routine failed:', err);
+                        // Safe fallback fallback if browser fails blob generation
+                        window.open(file.download_url, '_blank');
+                        downloadBtn.innerText = 'Download';
+                        downloadBtn.disabled = false;
+                    }
+                };
+
+                li.appendChild(downloadBtn);
                 fileListElement.appendChild(li);
             });
 
         } catch (error) {
             console.error(error);
-            fileListElement.innerHTML = `<li class="error-msg">Error loading files. Ensure your repository is Public and configuration is correct.</li>`;
+            fileListElement.innerHTML = `<li class="error-msg">Error loading files. Ensure configuration parameters match exactly.</li>`;
         }
     }
 
-    // Initialize fetching
+    // Fire application engine initialization
     fetchGitHubFiles();
 </script>
 
