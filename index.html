@@ -68,7 +68,7 @@
             color: var(--primary-color);
         }
 
-        .file-size {
+        .file-meta {
             font-size: 0.85rem;
             color: #666666;
             margin-top: 4px;
@@ -134,6 +134,23 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
+    // Function to fetch the last commit date for a specific file path
+    async function fetchFileDate(filePath) {
+        const commitsUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/commits?path=${filePath}&per_page=1`;
+        try {
+            const res = await fetch(commitsUrl);
+            if (!res.ok) return null;
+            const commits = await res.json();
+            if (commits && commits.length > 0) {
+                const dateStr = commits[0].commit.committer.date;
+                return new Date(dateStr).toLocaleString(); // Formats into local user timezone/view
+            }
+        } catch (e) {
+            console.error("Error fetching date for: " + filePath, e);
+        }
+        return "Unknown";
+    }
+
     async function fetchGitHubFiles() {
         const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FOLDER_PATH}`;
         
@@ -152,15 +169,22 @@
                 return;
             }
 
-            downloadableFiles.forEach(file => {
+            // Using a structured for...of loop to cleanly handle asynchronous template updates
+            for (const file of downloadableFiles) {
                 const li = document.createElement('li');
                 li.className = 'file-item';
 
-                // Structure the data row text
+                // Unique placeholder string safe for DOM IDs
+                const uniqueId = `date-${btoa(encodeURIComponent(file.name)).replace(/=/g, '')}`;
+
+                // Structure the data row text with metadata wrapper
                 li.innerHTML = `
                     <div class="file-info">
                         <span class="file-name">${file.name}</span>
-                        <span class="file-size">${formatBytes(file.size)}</span>
+                        <div class="file-meta">
+                            <span>Size: ${formatBytes(file.size)}</span> | 
+                            <span>Uploaded: <span id="${uniqueId}">Loading...</span></span>
+                        </div>
                     </div>
                 `;
 
@@ -204,7 +228,15 @@
 
                 li.appendChild(downloadBtn);
                 fileListElement.appendChild(li);
-            });
+
+                // Fetch upload/commit data in background to prevent interface blocking
+                fetchFileDate(file.path).then(formattedDate => {
+                    const dateSpan = document.getElementById(uniqueId);
+                    if (dateSpan) {
+                        dateSpan.textContent = formattedDate || "Unknown";
+                    }
+                });
+            }
 
         } catch (error) {
             console.error(error);
