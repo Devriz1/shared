@@ -1,2 +1,4 @@
 # shared
 here you can find the latest exe
+C98B-7BD8-B979-C0B7-17B5-AD8F-87D5-E953
+CEC0-5462-58C8-C786-79AC-A054-5411-70D6
