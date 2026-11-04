@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My File Center</title>
+    <style>
+        /* 💡 APPLE LIGHT MODE DESIGN PALETTE */
+        :root {
+            --bg-color: #f5f5f7;
+            --card-bg: rgba(255, 255, 255, 0.8);
+            --text-color: #1d1d1f;
+            --text-muted: #86868b;
+            --primary-color: #1d1d1f; 
+            --accent-color: #0071e3;  /* Apple Link Blue */
+            --border-color: rgba(0, 0, 0, 0.1);
+            --btn-disabled: #bae0ff;
+            --shadow-color: rgba(0, 0, 0, 0.04);
+        }
+
+        /* 🌙 APPLE DARK MODE DESIGN PALETTE */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #000000;
+                --card-bg: rgba(28, 28, 30, 0.8);
+                --text-color: #f5f5f7;
+                --text-muted: #86868b;
+                --primary-color: #f5f5f7;
+                --accent-color: #2997ff;   /* Apple Dark Blue */
+                --border-color: rgba(255, 255, 255, 0.15);
+                --btn-disabled: #143a5e;
+                --shadow-color: rgba(0, 0, 0, 0.5);
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 50px 20px;
+            display: flex;
+            justify-content: center;
+            letter-spacing: -0.015em;
+            -webkit-font-smoothing: antialiased;
+            transition: background-color 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 740px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 35px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            color: var(--primary-color);
+            margin-bottom: 8px;
+        }
+        
+        header p {
+            font-size: 1.05rem;
+            font-weight: 400;
+            color: var(--text-muted);
+        }
+
+        /* Apple Finder Style Breadcrumbs */
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 14px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding-left: 8px;
+            color: var(--text-muted);
+        }
+
+        .breadcrumb span.crumb-link {
+            color: var(--accent-color);
+            cursor: pointer;
+            transition: opacity 0.15s ease;
+        }
+
+        .breadcrumb span.crumb-link:hover {
+            opacity: 0.8;
+        }
+
+        .breadcrumb .current {
+            color: var(--text-color);
+            font-weight: 600;
+        }
+
+        /* Frosted Glass macOS Container */
+        .file-list {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 14px;
+            box-shadow: 0 8px 30px var(--shadow-color);
+            padding: 0;
+            list-style: none;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.15s ease;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Apple Interactive Folder Selection Rows */
+        .file-item.is-folder {
+            cursor: pointer;
+        }
+
+        .file-item.is-folder:hover {
+            background-color: rgba(0, 113, 227, 0.05);
+        }
+        
+        .file-item:not(.is-folder):hover {
+            background-color: rgba(128, 128, 128, 0.03);
+        }
+
+        .file-info {
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .file-name-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-name {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        /* macOS Inspired Folder/File Silhouette Geometry */
+        .item-icon {
+            width: 22px;
+            height: 22px;
+            flex-shrink: 0;
+        }
+
+        /* Apple Native Blue Finder Style */
+        .icon-folder { fill: #0071e3; } 
+        @media (prefers-color-scheme: dark) {
+            .icon-folder { fill: #2997ff; }
+        }
+        .icon-file { fill: #a1a1a6; }
+
+        .file-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 3px;
+            padding-left: 34px; 
+        }
+
+        /* Minimalistic Apple Buttons */
+        .download-btn, .open-btn {
+            background-color: var(--accent-color);
+            color: #ffffff;
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 20px; /* iOS Capsule Button Style */
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+            border: none;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .open-btn {
+            background-color: rgba(128, 128, 128, 0.08);
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        .download-btn:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .open-btn:hover {
+            background-color: var(--accent-color);
+            color: #ffffff;
+        }
+        
+        .download-btn:disabled {
+            background-color: var(--border-color);
+            cursor: not-allowed;
+            color: var(--text-muted);
+            transform: none;
+        }
+
+        .loading, .error-msg {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Shared Downloads</h1>
+        <p>Direct access to my GitHub repository files</p>
+    </header>
+
+    <div class="breadcrumb" id="breadcrumb"></div>
+
+    <ul class="file-list" id="fileList">
+        <li class="loading">Loading Files...</li>
+    </ul>
+</div>
+
+<script>
+    const GITHUB_USERNAME = "Devriz1";
+    const REPO_NAME = "shared";
+    const BASE_FOLDER_PATH = ""; // 🌐 Set to empty string to read from the true Repository Root level!
+
+    let subPathArray = []; 
+
+    const fileListElement = document.getElementById('fileList');
+    const breadcrumbElement = document.getElementById('breadcrumb');
+
+    const folderIconSVG = `<svg class="item-icon icon-folder" viewBox="0 0 24 24"><path d="M19.5 5.25h-6.938l-1.61-1.93a1.5 1.5 0 0 0-1.152-.54H4.5A2.25 2.25 0 0 0 2.25 5.03v13.94c0 1.243 1.007 2.25 2.25 2.25h15a2.25 2.25 0 0 0 2.25-2.25V7.5a2.25 2.25 0 0 0-2.25-2.25z"/></svg>`;
+    const fileIconSVG = `<svg class="item-icon icon-file" viewBox="0 0 24 24"><path d="M19.18 7.373l-4.553-4.553A1.5 1.5 0 0 0 13.564 2.38H6.75A2.25 2.25 0 0 0 4.5 4.63v14.74A2.25 2.25 0 0 0 6.75 21.62h10.5a2.25 2.25 0 0 0 2.25-2.25V8.437a1.5 1.5 0 0 0-.32-1.064zM13.5 4.25l4.25 4.25h-3.5a.75.75 0 0 1-.75-.75V4.25z"/></svg>`;
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function getCombinedPath() {
+        if (subPathArray.length === 0) return BASE_FOLDER_PATH;
+        return subPathArray.join('/');
+    }
+
+    function renderBreadcrumb() {
+        breadcrumbElement.innerHTML = `<span class="crumb-link" onclick="navigateToSubPath(-1)">Root</span>`;
+        
+        subPathArray.forEach((folderName, index) => {
+            breadcrumbElement.innerHTML += ` <span>›</span> `; 
+            if (index === subPathArray.length - 1) {
+                breadcrumbElement.innerHTML += `<span class="current">${folderName}</span>`;
+            } else {
+                breadcrumbElement.innerHTML += `<span class="crumb-link" onclick="navigateToSubPath(${index})">${folderName}</span>`;
+            }
+        });
+    }
+
+    function navigateToSubPath(index) {
+        subPathArray = subPathArray.slice(0, index + 1);
+        fetchGitHubFiles();
+    }
+
+    async function fetchFileDate(filePath) {
+        const commitsUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/commits?path=${encodeURIComponent(filePath)}&per_page=1`;
+        try {
+            const res = await fetch(commitsUrl);
+            if (!res.ok) return null;
+            const commits = await res.json();
+            if (commits && commits.length > 0) {
+                const dateStr = commits[0].commit.committer.date;
+                return new Date(dateStr).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'}); 
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        return "Unknown";
+    }
+
+    async function fetchGitHubFiles() {
+        const fullTargetingPath = getCombinedPath();
+        const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${fullTargetingPath}`;
+        
+        fileListElement.innerHTML = '<li class="loading">Loading folder contents...</li>';
+        renderBreadcrumb();
+
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error('API request failed');
+            
+            const items = await response.json();
+            fileListElement.innerHTML = ''; 
+
+            const filteredItems = items.filter(item => item.name !== 'README.md' && item.name !== 'index.html' && !item.name.startsWith('.'));
+
+            if (filteredItems.length === 0) {
+                fileListElement.innerHTML = '<li class="loading">This folder is empty.</li>';
+                return;
+            }
+
+            filteredItems.sort((a, b) => (b.type === 'dir') - (a.type === 'dir'));
+
+            for (const item of filteredItems) {
+                const li = document.createElement('li');
+                
+                if (item.type === 'dir') {
+                    li.className = 'file-item is-folder';
+                    li.innerHTML = `
+                        <div class="file-info">
+                            <div class="file-name-wrapper">
+                                ${folderIconSVG}
+                                <span class="file-name">${item.name}</span>
+                            </div>
+                            <div class="file-meta"><span>Folder</span></div>
+                        </div>
+                        <button class="open-btn">Open</button>
+                    `;
+                    
+                    li.addEventListener('click', (e) => {
+                        if (e.target.tagName === 'BUTTON') return; 
+                        subPathArray.push(item.name);
+                        fetchGitHubFiles();
+                    });
+
+                    li.querySelector('.open-btn').onclick = () => {
+                        subPathArray.push(item.name);
+                        fetchGitHubFiles();
+                    };
+
+                } else {
+                    li.className = 'file-item';
+                    const uniqueId = `date-${btoa(encodeURIComponent(item.name)).replace(/=/g, '')}`;
+
+                    li.innerHTML = `
+                        <div class="file-info">
+                            <div class="file-name-wrapper">
+                                ${fileIconSVG}
+                                <span class="file-name">${item.name}</span>
+                            </div>
+                            <div class="file-meta">
+                                <span>${formatBytes(item.size)}</span> — 
+                                <span id="${uniqueId}">Loading date...</span>
+                            </div>
+                        </div>
+                    `;
+
+                    const downloadBtn = document.createElement('button');
+                    downloadBtn.className = 'download-btn';
+                    downloadBtn.innerText = 'Download';
+                    
+                    downloadBtn.onclick = async () => {
+                        downloadBtn.disabled = true;
+                        downloadBtn.innerText = 'Downloading...';
+                        try {
+                            const fileResponse = await fetch(item.download_url);
+                            const fileBlob = await fileResponse.blob();
+                            const localUrl = window.URL.createObjectURL(fileBlob);
+                            
+                            const hiddenLink = document.createElement('a');
+                            hiddenLink.href = localUrl;
+                            hiddenLink.download = item.name; 
+                            document.body.appendChild(hiddenLink);
+                            hiddenLink.click();
+                            
+                            window.URL.revokeObjectURL(localUrl);
+                            document.body.removeChild(hiddenLink);
+                            
+                            downloadBtn.innerText = 'Download';
+                            downloadBtn.disabled = false;
+                        } catch (err) {
+                            window.open(item.download_url, '_blank');
+                            downloadBtn.innerText = 'Download';
+                            downloadBtn.disabled = false;
+                        }
+                    };
+
+                    li.appendChild(downloadBtn);
+
+                    // Map path accurately based on current array depths
+                    const relativePathForDate = fullTargetingPath ? `${fullTargetingPath}/${item.name}` : item.name;
+                    fetchFileDate(relativePathForDate).then(formattedDate => {
+                        const dateSpan = document.getElementById(uniqueId);
+                        if (dateSpan) dateSpan.textContent = formattedDate || "Unknown";
+                    });
+                }
+                fileListElement.appendChild(li);
+            }
+
+        } catch (error) {
+            fileListElement.innerHTML = `<li class="error-msg">Unable to display directory layout. Check parameters.</li>`;
+        }
+    }
+
+    fetchGitHubFiles();
+</script>
+
+</body>
+</html>
