@@ -219,6 +219,10 @@
             color: var(--text-muted);
             font-size: 0.95rem;
         }
+        
+        .error-msg {
+            color: #ff3b30;
+        }
     </style>
 </head>
 <body>
@@ -239,7 +243,7 @@
 <script>
     const GITHUB_USERNAME = "Devriz1";
     const REPO_NAME = "shared";
-    const BASE_FOLDER_PATH = ""; // 🌐 Set to empty string to read from the true Repository Root level!
+    const BASE_FOLDER_PATH = ""; // Set to empty string to read from the true Repository Root level!
 
     let subPathArray = []; 
 
@@ -256,7 +260,7 @@
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
-//
+
     function getCombinedPath() {
         if (subPathArray.length === 0) return BASE_FOLDER_PATH;
         return subPathArray.join('/');
@@ -305,12 +309,22 @@
 
         try {
             const response = await fetch(apiUrl);
-            if (!response.ok) throw new Error('API request failed');
+            
+            if (!response.ok) {
+                if (response.status === 403) {
+                    throw new Error("GitHub API Rate Limit exceeded (60 requests/hour limit).");
+                } else if (response.status === 404) {
+                    throw new Error("Repository or folder not found. Ensure repository visibility is public.");
+                } else {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+            }
             
             const items = await response.json();
             fileListElement.innerHTML = ''; 
 
-            const filteredItems = items.filter(item => item.name !== 'README.md' && item.name !== 'index.html' && !item.name.startsWith('.'));
+            // If it's a single file response instead of an array
+            const filteredItems = Array.isArray(items) ? items.filter(item => item.name !== 'README.md' && item.name !== 'index.html' && !item.name.startsWith('.')) : [];
 
             if (filteredItems.length === 0) {
                 fileListElement.innerHTML = '<li class="loading">This folder is empty.</li>';
@@ -395,7 +409,6 @@
 
                     li.appendChild(downloadBtn);
 
-                    // Map path accurately based on current array depths
                     const relativePathForDate = fullTargetingPath ? `${fullTargetingPath}/${item.name}` : item.name;
                     fetchFileDate(relativePathForDate).then(formattedDate => {
                         const dateSpan = document.getElementById(uniqueId);
@@ -406,7 +419,7 @@
             }
 
         } catch (error) {
-            fileListElement.innerHTML = `<li class="error-msg">Unable to display directory layout. Check parameters.</li>`;
+            fileListElement.innerHTML = `<li class="error-msg">${error.message}</li>`;
         }
     }
 
