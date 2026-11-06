@@ -302,29 +302,48 @@
 
     async function fetchGitHubFiles() {
         const fullTargetingPath = getCombinedPath();
-        const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${fullTargetingPath}`;
         
         fileListElement.innerHTML = '<li class="loading">Loading folder contents...</li>';
         renderBreadcrumb();
 
         try {
-            const response = await fetch(apiUrl);
-            
-            if (!response.ok) {
-                if (response.status === 403) {
-                    throw new Error("GitHub API Rate Limit exceeded (60 requests/hour limit).");
-                } else if (response.status === 404) {
-                    throw new Error("Repository or folder not found. Ensure repository visibility is public.");
-                } else {
-                    throw new Error(`API request failed with status ${response.status}`);
+            let items = [];
+
+            // Virtual setups folder contents (not in GitHub repo)
+            if (fullTargetingPath === 'setups') {
+                items = [
+                    { name: 'SQL Native Client', type: 'file', size: 0, download_url: null },
+                    { name: 'CRRuntime_32bit_13_0_5.zip', type: 'file', size: 0, download_url: null },
+                    { name: 'sql 14', type: 'file', size: 0, download_url: 'https://archive.org/download/sql-2014/SQL%202014.zip' },
+                    { name: 'sql 2022', type: 'file', size: 0, download_url: 'https://archive.org/download/sql-2022/SQL2022.zip' },
+                    { name: 'Crystal Report', type: 'file', size: 0, download_url: 'https://archive.org/download/sql-2022/Crystal.Reports.9.zip' }
+                ];
+            } else {
+                const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${fullTargetingPath}`;
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        throw new Error("GitHub API Rate Limit exceeded (60 requests/hour limit).");
+                    } else if (response.status === 404) {
+                        throw new Error("Repository or folder not found. Ensure repository visibility is public.");
+                    } else {
+                        throw new Error(`API request failed with status ${response.status}`);
+                    }
                 }
+                
+                items = await response.json();
             }
-            
-            const items = await response.json();
-            fileListElement.innerHTML = ''; 
 
             // If it's a single file response instead of an array
             const filteredItems = Array.isArray(items) ? items.filter(item => item.name !== 'README.md' && item.name !== 'index.html' && !item.name.startsWith('.')) : [];
+
+            // Virtual setups folder at root
+            if (fullTargetingPath === '' && !filteredItems.some(i => i.name === 'setups')) {
+                filteredItems.unshift({ name: 'setups', type: 'dir' });
+            }
+
+            fileListElement.innerHTML = ''; 
 
             if (filteredItems.length === 0) {
                 fileListElement.innerHTML = '<li class="loading">This folder is empty.</li>';
@@ -372,7 +391,7 @@
                             </div>
                             <div class="file-meta">
                                 <span>${formatBytes(item.size)}</span> — 
-                                <span id="${uniqueId}">Loading date...</span>
+                                <span id="${uniqueId}">${item.download_url ? 'External' : 'Local'}</span>
                             </div>
                         </div>
                     `;
@@ -381,39 +400,42 @@
                     downloadBtn.className = 'download-btn';
                     downloadBtn.innerText = 'Download';
                     
-                    downloadBtn.onclick = async () => {
-                        downloadBtn.disabled = true;
-                        downloadBtn.innerText = 'Downloading...';
-                        try {
-                            const fileResponse = await fetch(item.download_url);
-                            const fileBlob = await fileResponse.blob();
-                            const localUrl = window.URL.createObjectURL(fileBlob);
-                            
-                            const hiddenLink = document.createElement('a');
-                            hiddenLink.href = localUrl;
-                            hiddenLink.download = item.name; 
-                            document.body.appendChild(hiddenLink);
-                            hiddenLink.click();
-                            
-                            window.URL.revokeObjectURL(localUrl);
-                            document.body.removeChild(hiddenLink);
-                            
-                            downloadBtn.innerText = 'Download';
-                            downloadBtn.disabled = false;
-                        } catch (err) {
-                            window.open(item.download_url, '_blank');
-                            downloadBtn.innerText = 'Download';
-                            downloadBtn.disabled = false;
-                        }
-                    };
+                    if (item.download_url) {
+                        downloadBtn.onclick = async () => {
+                            downloadBtn.disabled = true;
+                            downloadBtn.innerText = 'Downloading...';
+                            try {
+                                const fileResponse = await fetch(item.download_url);
+                                const fileBlob = await fileResponse.blob();
+                                const localUrl = window.URL.createObjectURL(fileBlob);
+                                
+                                const hiddenLink = document.createElement('a');
+                                hiddenLink.href = localUrl;
+                                hiddenLink.download = item.name; 
+                                document.body.appendChild(hiddenLink);
+                                hiddenLink.click();
+                                
+                                window.URL.revokeObjectURL(localUrl);
+                                document.body.removeChild(hiddenLink);
+                                
+                                downloadBtn.innerText = 'Download';
+                                downloadBtn.disabled = false;
+                            } catch (err) {
+                                window.open(item.download_url, '_blank');
+                                downloadBtn.innerText = 'Download';
+                                downloadBtn.disabled = false;
+                            }
+                        };
+                        li.appendChild(downloadBtn);
+                    }
 
-                    li.appendChild(downloadBtn);
-
-                    const relativePathForDate = fullTargetingPath ? `${fullTargetingPath}/${item.name}` : item.name;
-                    fetchFileDate(relativePathForDate).then(formattedDate => {
-                        const dateSpan = document.getElementById(uniqueId);
-                        if (dateSpan) dateSpan.textContent = formattedDate || "Unknown";
-                    });
+                    if (item.download_url) {
+                        const relativePathForDate = fullTargetingPath ? `${fullTargetingPath}/${item.name}` : item.name;
+                        fetchFileDate(relativePathForDate).then(formattedDate => {
+                            const dateSpan = document.getElementById(uniqueId);
+                            if (dateSpan) dateSpan.textContent = formattedDate || "Unknown";
+                        });
+                    }
                 }
                 fileListElement.appendChild(li);
             }
