@@ -113608,3 +113608,208 @@ End
 
 go
 
+if object_id('prStockRegister') is not null
+	drop proc prStockRegister
+
+go
+
+create proc prStockRegister
+@CompanyID int,
+@From int,
+@To int,
+@ProductId int,
+@Detailed int,
+@UomId int,
+@WHID int,
+@CostCentreId int=0
+
+as 
+
+set transaction isolation level read uncommitted
+set nocount on
+
+declare @ob float,@minDate int,@Unit float
+
+declare @T1 table
+(
+  CompanyId int,
+  InOut int,	
+  Date int,
+  Vtype int,
+  Vno int,
+  Id int,
+  ProductId int, 
+  Rate float,
+  CP float,
+  SRate float,
+  Qty float
+)
+
+insert tmpTable (Id,spid) select @ProductId,@@spid
+insert @T1 
+exec spStock @CompanyID=@CompanyID,@WHID=@WHID,@ToDate=@To,@Type=8,@CostCentreId=@CostCentreId
+
+select  @Unit = secondary from invUomLevels where ProductId = @ProductId and UomId = @UomId 
+if @Unit is null set @Unit = 1
+update @T1 set qty = qty / nullif(@Unit,0), rate = rate * @Unit, srate = srate * @Unit
+
+declare @SR table (Date int,Opening float,InWards float,OutWards float,Closing float)
+declare @S table (Date int,Opening float,InWards float,OutWards float)
+
+--InWards
+insert @SR (Date,InWards) select Date,sum(qty) qty from @T1 where inout is null and Date between @From and @To group by Date
+--OutWards
+insert @SR (Date,OutWards) select Date,-sum(qty) qty from @T1 where inout = 1 and Date between @From and @To group by Date
+--For Date grouping
+insert @S select Date,sum(isnull(Opening,0))Opening,sum(isnull(Inwards,0))Inwards,sum(isnull(Outwards,0))Outwards FROM @SR group by date
+
+if @Detailed = 0
+	begin
+		--For OB
+		set @ob = isnull((select sum(qty) qty from @T1 where isnull(inout,0) = 0 and ProductId = @ProductId and isnull(Date,0) < @From),0) - isnull((select -sum(qty) qty from @T1                   
+        where inout = 1 and Date < @From),0)		
+		insert @S(Date,OPENING) 
+		select s.Date,sum(isnull(ob.ob,0))OB from @S s
+		join 
+		(select Date,sum(isnull(Inwards,0)-isnull(Outwards,0))OB from @S group by date union all select 0 Date, @Ob OB)ob
+		on ob.Date<s.Date group by s.Date
+		
+		if not exists(select 1 from @S) 
+		insert @S (Date,Opening) select isnull((select min(date) date from @T1 where date >= @From),@From), @ob 
+		select cast(cast(date as varchar) as datetime) Date ,isnull(sum(Opening),0) Opening,isnull(sum(Inwards),0) Inwards,isnull(sum(Outwards),0)Outwards, 		
+        sum(isnull(Opening,0) + isnull(Inwards,0) - isnull(Outwards,0)) Closing   FROM @S group by date
+	end
+else
+	begin
+		declare @SRD table 
+		(
+		Rid int,
+		CompanyId int,
+		Date numeric,
+		Vtype numeric,
+		Vno numeric,
+		Account nvarchar(100),
+		Opening float,
+		InWards float,
+		OutWards float,
+		Closing float,
+		CP float,
+		Rate float,
+		TrId int,
+		TRType varchar(100)
+		)
+		
+		
+        --InWards Less than from date
+		insert @S (Date,InWards) select 0,sum(qty) qty from @T1 where inout is null and isnull(Date,0) < @From group by Date
+		--OutWards Less than from date
+		insert @S (Date,OutWards) select 0,-sum(qty) qty from @T1 where inout = 1 and isnull(Date,0) < @From group by Date       
+		--For Opening stock
+		insert @SRD(Rid,Date,OPENING) 
+		select 0,s.Date,sum(isnull(ob.ob,0))OB from @S s
+		join 
+		(select Date,sum(isnull(Inwards,0)-isnull(Outwards,0))OB from @S group by date)ob
+		on ob.Date<s.Date group by s.Date
+
+		--For Closing stock
+		insert @SRD(Rid,Date,closing) select 2,s.Date,sum(isnull(ob.ob,0))OB from @S s
+		join 
+		(select Date,sum(isnull(Inwards,0)-isnull(Outwards,0))OB from @S group by date)ob
+		on ob.Date<=s.Date where s.date > 0 group by s.Date
+
+               --If there is no transaction in between the date, then add the opening
+            if not exists(select 1 from @SRD)
+			begin
+				set @ob = isnull((select sum(qty) qty from @T1 where (inout = 0 or inout is null) and ProductId = @ProductId),0) - isnull((select -sum(qty) qty from @T1 				
+                where inout = 1 ),0)
+				set @minDate = (select isnull((select min(date) date from @T1 where date >= @From),@From))
+				insert @SRD(Date,Opening,Closing) 
+				select @minDate,@ob,@ob 
+			end
+            else
+			begin
+			      --If there is no opening balance of the first date, then add Zero as opening balance with that first transaction date	
+              		      select @minDate = min(date) from @SRD
+		              if not exists(select 1 from @SRD where date = @minDate and opening is not null) insert @SRD(Date,Opening) select @minDate,0
+			end 
+
+
+
+		    --Transaction
+        	--Inwards
+	        insert @SRD (Rid,CompanyId,Date,Vtype,Vno,CP,Rate,TrId,Inwards) 
+			select 1,t1.CompanyId,t1.Date,t1.Vtype,t1.Vno,t1.CP,case when t1.id in (4,5,15) then t1.srate else t1.Rate end,t1.Id,sum(abs(t1.qty)) qty from @T1 t1
+	        where t1.qty > = 0 and t1.Date between @From and @To 
+			group by t1.CompanyId,t1.Date,t1.Vtype,t1.Vno,t1.CP,t1.Rate,t1.id,t1.srate
+
+	        --Outwards
+			insert @SRD (Rid,CompanyId,Date,Vtype,Vno,CP,Rate,TrId,Outwards) 
+			select 1,t1.CompanyId,t1.Date,t1.Vtype,t1.Vno,t1.CP,case when t1.id in (4,5,15) then t1.srate else t1.Rate end,t1.id,sum(abs(qty)) qty from @T1 t1
+	        where t1.qty < 0 and t1.Date between @From and @To 
+			group by t1.CompanyId,t1.Date,t1.Vtype,t1.Vno,t1.CP,t1.Rate,t1.srate,t1.id
+			
+			--Transaction
+			update s set s.TrType=t.Name from @SRD s join invTransaction t on s.TrId=t.ID
+			
+			--Vendor
+			update s set s.Account=v.Name from @SRD s join invPurchaseHeader p on s.Vtype=p.VtypeId and s.Vno=p.No and s.Date=p.Date and p.CompanyId=s.CompanyID join aAccount v on p.VendorID=v.ID where s.TrId=2
+			update s set s.Account=v.Name from @SRD s join invPurchaseReturnHeader p on s.Vtype=p.VtypeId and s.Vno=p.No and s.Date=p.Date and p.CompanyId=s.CompanyID join aAccount v on p.VendorID=v.ID where s.TrId=3
+
+			--Customer
+			update s set s.Account=v.Name from @SRD s join invSalesHeader p on s.Vtype=p.VtypeId and s.Vno=p.No and s.Date=p.Date and p.CompanyId=s.CompanyID join aAccount v on p.CustomerId=v.ID where s.TrId=4
+			update s set s.Account=v.Name from @SRD s join invSalesReturnHeader p on s.Vtype=p.VtypeId and s.Vno=p.No and s.Date=p.Date and p.CompanyId=s.CompanyID join aAccount v on p.CustomerId=v.ID where s.TrId=5
+			update s set s.Account=v.Name from @SRD s join invIssueHeader p on s.Vno=p.No and s.Date=p.Date and p.CompanyId=s.CompanyID join aAccount v on p.CustomerId=v.ID where s.TrId=12
+			update s set s.Account=v.Name from @SRD s join invReturnHeader p on s.Vno=p.No and s.Date=p.Date and p.CompanyId=s.CompanyID join aAccount v on p.CustomerId=v.ID where s.TrId=13
+
+			--Company From, To
+			update s set s.Account=v.Name from @SRD s join invCompanyTransferHeader p on s.Vtype is null and s.Vno=p.No and s.Date=p.Date and p.CompanyFrom=s.CompanyID join aCompany c on p.CompanyTo=c.Id join aAccount v on c.AccountId=v.ID where s.TrId=16 and s.OutWards>0
+			update s set s.Account=v.Name from @SRD s join invCompanyTransferHeader p on s.Vtype is null and s.Vno=p.No and s.Date=p.Date and p.CompanyTo=s.CompanyID join aCompany c on p.CompanyFrom=c.Id join aAccount v on c.AccountId=v.ID where s.TrId=16 and s.InWards>0
+
+			--SerialNo Cost
+			if exists(select 1 from invOption where CompanyId=@CompanyId and StockCalculation=2)
+			Begin
+				;with cp as
+				(select sr.Date,sr.Vtype,sr.VNo,Avg(pd.CostPrice)CP from @SRD sr
+				 join invSalesDetails sd on sd.CompanyId=@CompanyId and sr.Vtype=sd.VtypeId and sr.VNo=sd.No 
+				 join aPeriod p on sr.Date between p.[From] and p.[To]
+				 join invProductSerialNumber sn on sd.SerialNoId=sn.id
+				 join invPurchaseDetails pd on sn.CompanyId=pd.CompanyId and sn.PeriodId=pd.PeriodId and sn.VtypeId=pd.Vtypeid and sn.No=pd.No and sn.PSNo=pd.SNo
+				 where pd.ProductId=@Productid
+				 group by sr.Date,sr.Vtype,sr.VNo
+				)
+
+				update sr set sr.CP=cp.CP from @SRD sr join cp on sr.Date=cp.Date and sr.Vtype=cp.Vtype and sr.Vno=cp.Vno
+			End
+
+			insert @SRD (Date) select max(date)+1 from @T1 having max(date) is not null
+        	insert @SRD (Date) select max(date)+1 from @T1 having max(date) is not null
+        
+			insert @SRD (Date,TrType,Inwards) select (select max(date)+1 from @T1),'Opening Stock',sum(qty) from @T1 t1 
+			where Date < @From  having sum(qty) is not null
+
+			
+			
+			declare @MDate int
+			select @MDate=max(date)+1 from @T1
+
+			insert @SRD (Date,TrType,Inwards) 
+			select @MDate,t2.name,sum(t1.qty) from @T1 t1 
+			join invTransaction t2 on t1.Id = t2.Id 
+			where Date between @From and @To
+	        group by t2.id,t2.name having sum(t1.qty) is not null order by t2.id               
+
+	        insert @SRD (Date,TrType,Inwards) select max(date)+1 ,'Closing Stock',sum(qty) from @T1 
+        	having sum(qty) is not null
+  
+	        select p.ID PeriodID,case when t1.opening is not null then cast(cast(t1.date as varchar) as datetime) else null end Date,
+		    t1.Opening,t1.TRType [Type],c.Name Company,t2.Code Vtype,t1.Vno [No],t1.Account,t1.CP,t1.Rate,t1.Inwards,t1.Outwards,t1.Closing from @SRD t1
+			left outer join invVoucherTypeDetails t2 on t1.vtype = t2.Id 
+			left join aPeriod p on t1.Date between p.[From] and p.[To]
+			left join aCompany c on t1.CompanyId=c.ID
+	        order by t1.date,t1.rid,t2.code,t1.vno
+        
+	end		
+
+go
+
+

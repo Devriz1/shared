@@ -307,32 +307,28 @@
         renderBreadcrumb();
 
         try {
-            let items = [];
+            const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${fullTargetingPath}`;
+            const response = await fetch(apiUrl);
+            
+            if (!response.ok) {
+                if (response.status === 403) {
+                    throw new Error("GitHub API Rate Limit exceeded (60 requests/hour limit).");
+                } else if (response.status === 404) {
+                    throw new Error("Repository or folder not found. Ensure repository visibility is public.");
+                } else {
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
+            }
+            
+            let items = await response.json();
 
-            // Virtual setups folder contents (not in GitHub repo)
+            // Merge virtual archive.org downloads into setups folder
             if (fullTargetingPath === 'setups') {
-                items = [
-                    { name: 'SQL Native Client', type: 'file', size: 0, download_url: null },
-                    { name: 'CRRuntime_32bit_13_0_5.zip', type: 'file', size: 0, download_url: null },
+                items = items.concat([
                     { name: 'sql 14', type: 'file', size: 0, download_url: 'https://archive.org/download/sql-2014/SQL%202014.zip' },
                     { name: 'sql 2022', type: 'file', size: 0, download_url: 'https://archive.org/download/sql-2022/SQL2022.zip' },
                     { name: 'Crystal Report', type: 'file', size: 0, download_url: 'https://archive.org/download/sql-2022/Crystal.Reports.9.zip' }
-                ];
-            } else {
-                const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${fullTargetingPath}`;
-                const response = await fetch(apiUrl);
-                
-                if (!response.ok) {
-                    if (response.status === 403) {
-                        throw new Error("GitHub API Rate Limit exceeded (60 requests/hour limit).");
-                    } else if (response.status === 404) {
-                        throw new Error("Repository or folder not found. Ensure repository visibility is public.");
-                    } else {
-                        throw new Error(`API request failed with status ${response.status}`);
-                    }
-                }
-                
-                items = await response.json();
+                ]);
             }
 
             // If it's a single file response instead of an array
